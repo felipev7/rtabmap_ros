@@ -1,0 +1,20 @@
+<launch>
+  <!-- For integration with RST Turtlebot Package -->
+
+  <arg name="turtlebot_no"              default="1"/>
+  <arg name="rgbd_odometry"             default="false"/>         <!-- We will use odometry from the robots -->
+
+  <include file="$(find rtabmap_ros)/launch/rtabmap.launch">
+    <arg name="rtabmap_args"            value="--delete_db_on_start 
+                                               --udebug"/>
+    <arg name="namespace"               value="rtabmap_master"/>
+    <!-- RGB-D related topics -->
+    <arg name="rgb_topic"               value="/robot_$(arg turtlebot_no)/camera/rgb/image_rect_color" />
+    <arg name="depth_topic"             value="/robot_$(arg turtlebot_no)/camera/depth_registered/image_raw" />
+    <arg name="camera_info_topic"       value="/robot_$(arg turtlebot_no)/camera/rgb/camera_info" />
+    <arg name="frame_id"                value="robot_$(arg turtlebot_no)/base_footprint"/>
+    <arg name="visual_odometry"         value="$(arg rgbd_odometry)"/>
+    <arg name="odom_topic"              value="/robot_$(arg turtlebot_no)/odom"/>
+    <arg name="compressed"              value="true"/>          <!-- We use compressed images due to bandwidth limitations -->
+  </include>
+</launch>

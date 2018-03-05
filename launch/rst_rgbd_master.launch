@@ -1,0 +1,66 @@
+<launch>
+  <!-- For integration with RST Turtlebot Package -->
+
+  <arg name="turtlebot_no"              default="1"/>             <!-- In Multirobot environment, the map is built from first robot as default-->
+  <arg name="rgbd_odometry"             default="false"/>         <!-- We will use odometry from the robots -->
+  <arg name="rtabmap_optimizer"         default="true"/>          <!-- If we want to use the map_optimizer_server node, set to false -->
+  <arg name="multi_robot"               default="true"/>          <!-- Multirobot mode -->
+  <arg name="master_rgbdslam"           default="true"/>          <!-- Master or Client mode -->
+
+  <group if="$(arg rtabmap_optimizer)">
+    <include file="$(find rtabmap_ros)/launch/rtabmap.launch">
+      <arg name="rtabmap_args"            value="--delete_db_on_start 
+                                                 --udebug
+                                                 --gen_scan true
+                                                 --gen_scan_max_depth 6.0
+                                                 --Reg/Force3DoF true
+                                                 --Grid/FromDepth true
+                                                 --Grid/MaxObstacleHeight 1.0"/>
+                                                 <!--  TESTING PARAMETERS
+                                                 Kp/MaxDepth 4.0 | 0 
+                                                 Icp/CorrespondenceRatio 0.3 | 0.2
+                                                 Vis/MinInliers 15 | 20
+                                                 Rtabmap/TimeThr 700 | 0
+                                                 Mem/RehearsalSimilarity 0.3 | 0.6
+                                                 GridGlobal/MinSize 20 | 0
+                                                 Optimizer/Strategy 1 | 1 optimization strategy: 0=TORO, 1=g2o and 2=GTSAM
+                                                 Optimizer/Iterations 100 | 20
+                                                 Optimizer/Epsilon 0.00001 | 0 Stop optimizing when the error improvement is less than this value -->
+      <!-- Multirobot environment -->
+      <arg name="multi_robot"             value="$(arg multi_robot)"/> 
+      <arg name="master_rgbdslam"         value="$(arg master_rgbdslam)"/>
+      <arg name="namespace"               value="rtabmap_master"/>
+      <arg if="$(arg multi_robot)"        name="odom_frame_id"        value="robot_$(arg turtlebot_no)/odom"/>    <!-- As map is built from first robot -->
+      <!-- RGB-D related topics -->
+      <arg name="rgb_topic"               value="/robot_$(arg turtlebot_no)/camera/rgb/image_rect_color" />       <!-- TODO: Not needed in multirobot -->
+      <arg name="depth_topic"             value="/robot_$(arg turtlebot_no)/camera/depth_registered/image_raw" /> <!-- TODO: Not needed in multirobot -->
+      <arg name="camera_info_topic"       value="/robot_$(arg turtlebot_no)/camera/rgb/camera_info" />            <!-- TODO: Not needed in multirobot -->
+      <arg name="frame_id"                value="robot_$(arg turtlebot_no)/base_footprint"/>
+      <arg name="visual_odometry"         value="$(arg rgbd_odometry)"/>                                          <!-- TODO: Not needed in multirobot -->
+      <arg name="odom_topic"              value="/robot_$(arg turtlebot_no)/odom"/>                               <!-- TODO: Not needed in multirobot -->
+      <arg name="compressed"              value="true"/>          <!-- We use compressed images due to bandwidth limitations. TODO: Not needed in multirobot -->
+      <arg name="subscribe_scan"          value="true"/>
+      <arg name="scan_topic"              value="/robot_$(arg turtlebot_no)/scan"/>
+    </include>
+  </group>
+
+  <group unless="$(arg rtabmap_optimizer)">
+    <group ns="rtabmap">
+      <node pkg="rtabmap_ros" type="map_optimizer_server" name="map_optimizer_server" output="screen">
+        <!--  <remap unless="$(arg rgbd_odometry)" from="odom"  to="/robot_$(arg turtlebot_no)/odom"/> -->
+        <param unless="$(arg rgbd_odometry)" name="odom_frame_id"  type="string" value="robot_$(arg turtlebot_no)/odom"/>
+      </node>
+      
+      <node pkg="rtabmap_ros" type="rtabmapviz" name="rtabmapviz" output="screen">
+        <remap from="mapData"             to="mapData_optimized"/>
+        <param name="frame_id"            value="robot_$(arg turtlebot_no)/camera_link"/>
+        <param name="subscribe_depth"     value="false"/>
+      </node>
+      
+      <node pkg="rtabmap_ros" type="map_assembler" name="map_assembler" output="screen" args="--udebug">
+        <remap from="mapData"             to="mapData_optimized"/>
+      </node>
+    </group>
+  </group>
+
+</launch>

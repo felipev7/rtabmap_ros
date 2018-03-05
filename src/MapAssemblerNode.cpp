@@ -160,7 +160,9 @@ public:
 			}
 		}
 
-		mapsManager_.init(nh, pnh, ros::this_node::getName(), false);
+		UDEBUG("Initializing mapsManager using public namespace for MULTIROBOT environment...");
+		// mapsManager_.init(nh, pnh, ros::this_node::getName(), false); // Default RTABMAP
+		mapsManager_.init(nh, pnh, ros::this_node::getName(), true);
 		mapsManager_.backwardCompatibilityParameters(pnh, parameters);
 		mapsManager_.setParameters(parameters);
 

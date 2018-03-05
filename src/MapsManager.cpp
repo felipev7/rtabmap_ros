@@ -1119,6 +1119,7 @@ void MapsManager::publishMaps(
 	}
 #endif
 #endif
+	ROS_INFO("Before Subscribers Publishing maps...");
 
 	if(gridMapPub_.getNumSubscribers() || projMapPub_.getNumSubscribers())
 	{
@@ -1143,6 +1144,9 @@ void MapsManager::publishMaps(
 		float xMin=0.0f, yMin=0.0f, gridCellSize = 0.05f;
 		cv::Mat pixels = this->generateGridMap(poses, xMin, yMin, gridCellSize);
 
+		ROS_INFO("Before pixels...");
+		ROS_INFO("Poses size: %d", (int)poses.size());
+
 		if(!pixels.empty())
 		{
 			//init
@@ -1166,6 +1170,8 @@ void MapsManager::publishMaps(
 
 			map.header.frame_id = mapFrameId;
 			map.header.stamp = stamp;
+			
+			ROS_INFO("Publishing maps... NOW");
 
 			if(gridMapPub_.getNumSubscribers())
 			{

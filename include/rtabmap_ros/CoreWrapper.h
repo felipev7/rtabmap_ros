@@ -44,6 +44,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <rtabmap/core/Parameters.h>
 #include <rtabmap/core/Rtabmap.h>
+#include <rtabmap/core/Signature.h>
 
 #include "rtabmap_ros/GetMap.h"
 #include "rtabmap_ros/ListLabels.h"
@@ -113,6 +114,9 @@ private:
 				const sensor_msgs::LaserScanConstPtr& scanMsg,
 				const sensor_msgs::PointCloud2ConstPtr& scan3dMsg,
 				const rtabmap_ros::OdomInfoConstPtr& odomInfoMsg);
+	
+	// RST_Vallejo: Callback for MapData message from client robots
+	void mapDataReceivedCallback(const rtabmap_ros::MapDataConstPtr & msg);
 
 	void defaultCallback(const sensor_msgs::ImageConstPtr & imageMsg); // no odom
 
@@ -130,6 +134,14 @@ private:
 			const rtabmap::Transform & odom = rtabmap::Transform(),
 			const std::string & odomFrameId = "",
 			const cv::Mat & odomCovariance = cv::Mat::eye(6,6,CV_64FC1));
+
+	// RST_Vallejo: Modified process function for Multirobot environment
+	void process(
+			const ros::Time & stamp,
+			rtabmap::Signature * clientSignature,
+			const std::map<int, rtabmap::Transform> & clientPoses,
+			const std::multimap<int, rtabmap::Link> & clientLinks,
+			const std::string & odomFrameId = "");
 
 	bool updateRtabmapCallback(std_srvs::Empty::Request&, std_srvs::Empty::Response&);
 	bool resetRtabmapCallback(std_srvs::Empty::Request&, std_srvs::Empty::Response&);
@@ -182,6 +194,12 @@ private:
 	bool latestNodeWasReached_;
 	rtabmap::ParametersMap parameters_;
 
+	// RST_Vallejo: Variable to determine the use of CoreWrapper as a Server or as a Client on a Multiple robots environment
+	bool multiRobot_;
+	bool masterRGBDSLAM_;
+	unsigned int robotNumber_;	// RST_Vallejo: keeping track of the robot being processed
+	ros::Time lastPoseMsgStamp_; // RST_Vallejo: stamp created for the received mapData message
+
 	std::string frameId_;
 	std::string odomFrameId_;
 	std::string mapFrameId_;
@@ -199,7 +217,8 @@ private:
 	double genScanMinDepth_;
 	int scanCloudMaxPoints_;
 
-	rtabmap::Transform mapToOdom_;
+	rtabmap::Transform mapToOdom_; 
+	std::vector<rtabmap::Transform>  mapToOdomMulti_;	// RST_Vallejo: Edited mapToOdom as a vector to keep info on all robots in multirobot mode
 	boost::mutex mapToOdomMutex_;
 
 	MapsManager mapsManager_;
@@ -209,6 +228,9 @@ private:
 	ros::Publisher mapGraphPub_;
 	ros::Publisher labelsPub_;
 	ros::Publisher mapPathPub_;
+
+	// RST_Vallejo: Subscriber for mapData topic coming from all robots
+	ros::Subscriber mapDataSub_;
 
 	//Planning stuff
 	ros::Subscriber goalSub_;

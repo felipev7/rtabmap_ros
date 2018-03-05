@@ -23,6 +23,10 @@
   
   <!-- Localization-only mode -->
   <arg name="localization"            default="false"/>
+
+  <!-- RST_Vallejo: Multirobot mode -->
+  <arg name="multi_robot"             default="false"/>
+  <arg name="master_rgbdslam"         default="false"/>
   
   <!-- sim time for convenience, if playing a rosbag -->
   <arg name="use_sim_time"            default="false"/>
@@ -190,6 +194,11 @@
       <remap from="user_data"              to="$(arg user_data_topic)"/>
       <remap from="user_data_async"        to="$(arg user_data_async_topic)"/>
       <remap unless="$(arg visual_odometry)" from="odom"  to="$(arg odom_topic)"/>
+
+      <!-- RST_Vallejo: multirobot mode -->
+  	  <remap from="grid_map"                  to="/map"/>       <!-- RST_Vallejo: TODO: Include this on our own launch file -->
+      <param name="multi_robot"               type="bool"   value="$(arg multi_robot)"/>
+      <param name="master_rgbdslam"           type="bool"   value="$(arg master_rgbdslam)"/>
       
       <!-- localization mode -->
 	  <param     if="$(arg localization)" name="Mem/IncrementalMemory" type="string" value="false"/>

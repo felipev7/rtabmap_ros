@@ -1,0 +1,41 @@
+<launch>
+  <!-- For integration with RST Turtlebot Package -->
+
+  <arg name="turtlebot_no"              default="1"/>
+  <arg name="rgbd_odometry"             default="false"/>         <!-- We will use odometry from the robots -->
+  <arg name="multi_robot"               default="true"/>          <!-- Multirobot mode -->
+  <arg name="master_rgbdslam"           default="false"/>         <!-- Master or Client mode -->
+
+  <group ns="robot_$(arg turtlebot_no)">  <!-- RST_Vallejo: Namespace in multirobot mode to individualize mapData messages  -->
+    <remap from="mapData"             to="/rtabmap/mapData"/>
+    <include file="$(find rtabmap_ros)/launch/rtabmap.launch">
+      <arg name="rtabmap_args"            value="--delete_db_on_start
+                                                --udebug
+                                                --gen_scan true
+                                                --gen_scan_max_depth 6.0
+                                                --Mem/MultiRobotMode $(arg multi_robot)
+                                                --Mem/MultiRobotMaster $(arg master_rgbdslam)
+                                                --Mem/ClientRobotNumber $(arg turtlebot_no)
+                                                --Reg/Force3DoF true
+                                                --Grid/FromDepth true
+                                                --Grid/MaxObstacleHeight 1.0
+                                                --RGBD/OptimizeMaxError 0 
+                                                --Optimizer/Iterations 0
+                                                --RGBD/ProximityBySpace false"/>
+      <arg name="rtabmapviz"              value="false"/>
+      <!-- Multirobot environment -->
+      <arg name="multi_robot"             value="$(arg multi_robot)"/> 
+      <arg name="master_rgbdslam"         value="$(arg master_rgbdslam)"/>
+      <!-- RGB-D related topics -->
+      <arg name="rgb_topic"               value="/robot_$(arg turtlebot_no)/camera/rgb/image_rect_color" />
+      <arg name="depth_topic"             value="/robot_$(arg turtlebot_no)/camera/depth_registered/image_raw" />
+      <arg name="camera_info_topic"       value="/robot_$(arg turtlebot_no)/camera/rgb/camera_info" />
+      <arg name="frame_id"                value="robot_$(arg turtlebot_no)/base_footprint"/>
+      <arg name="visual_odometry"         value="$(arg rgbd_odometry)"/>
+      <arg name="odom_topic"              value="/robot_$(arg turtlebot_no)/odom"/>
+      <arg name="compressed"              value="true"/>          <!-- We use compressed images due to bandwidth limitations -->
+      <arg name="subscribe_scan"          value="true"/>
+      <arg name="scan_topic"              value="/robot_$(arg turtlebot_no)/scan"/>
+    </include>
+  </group>
+</launch>

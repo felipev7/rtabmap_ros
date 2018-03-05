@@ -86,6 +86,9 @@ CoreWrapper::CoreWrapper() :
 		lastPose_(Transform::getIdentity()),
 		lastPoseIntermediate_(false),
 		latestNodeWasReached_(false),
+		multiRobot_(false),
+		masterRGBDSLAM_(false),
+		robotNumber_(0),
 		frameId_("base_link"),
 		odomFrameId_(""),
 		mapFrameId_("map"),
@@ -103,6 +106,7 @@ CoreWrapper::CoreWrapper() :
 		genScanMinDepth_(0.0),
 		scanCloudMaxPoints_(0),
 		mapToOdom_(rtabmap::Transform::getIdentity()),
+		mapToOdomMulti_(10,rtabmap::Transform::getIdentity()),	// RST_Vallejo: Map Correction variable for Robots in Multirobot mode
 		transformThread_(0),
 		tfThreadRunning_(false),
 		SYNC_INIT(rgb),
@@ -123,7 +127,27 @@ void CoreWrapper::onInit()
 	ros::NodeHandle & nh = getNodeHandle();
 	ros::NodeHandle & pnh = getPrivateNodeHandle();
 
-	mapsManager_.init(nh, pnh, getName(), true);
+	// RST_Vallejo: Reading parameter for Multirobot environment
+	pnh.param("multi_robot", multiRobot_, multiRobot_);
+	pnh.param("master_rgbdslam", masterRGBDSLAM_, masterRGBDSLAM_);
+	if(multiRobot_)
+	{
+		NODELET_INFO("RTABMAP for Multirobot environment activated in mode: ");
+		if(masterRGBDSLAM_)
+		{
+			NODELET_INFO("Map Optimizer Server");
+		}
+		else
+		{
+			NODELET_INFO("Robot Client");
+		}
+	}
+
+	// RST_Vallejo: mapsManager functionability only on the master machine when Multirobot mode activated and on the standard single robot RTABMAP 
+	if(!multiRobot_ || (multiRobot_ && masterRGBDSLAM_))
+	{
+		mapsManager_.init(nh, pnh, getName(), true);
+	}
 
 	bool publishTf = true;
 	double tfDelay = 0.05; // 20 Hz
@@ -325,8 +349,12 @@ void CoreWrapper::onInit()
 		}
 	}
 
-	// Backward compatibility (MapsManager)
-	mapsManager_.backwardCompatibilityParameters(pnh, parameters_);
+	// RST_Vallejo: mapsManager functionability only on the master machine when Multirobot mode activated and on the standard single robot RTABMAP 
+	if(!multiRobot_ || (multiRobot_ && masterRGBDSLAM_))
+	{
+		// Backward compatibility (MapsManager)
+		mapsManager_.backwardCompatibilityParameters(pnh, parameters_);
+	}
 
 	bool subscribeScan2d = false;
 	bool subscribeScan3d = false;
@@ -450,7 +478,11 @@ void CoreWrapper::onInit()
 		NODELET_INFO("rtabmap: database_path parameter not set, the map will not be saved.");
 	}
 
-	mapsManager_.setParameters(parameters_);
+	// RST_Vallejo: mapsManager functionability only on the master machine when Multirobot mode activated and on the standard single robot RTABMAP 
+	if(!multiRobot_ || (multiRobot_ && masterRGBDSLAM_))
+	{
+		mapsManager_.setParameters(parameters_);
+	}
 
 	// Init RTAB-Map
 	rtabmap_.init(parameters_, databasePath_);
@@ -502,8 +534,18 @@ void CoreWrapper::onInit()
 		UWARN("Graph optimization is disabled (%s=0), the tf between frame \"%s\" and odometry frame will not be published. You can safely ignore this warning if you are using map_optimizer node.",
 				Parameters::kOptimizerIterations().c_str(), mapFrameId_.c_str());
 	}
+	
+	// RST_Vallejo: Subscribers callbacks
+	if(masterRGBDSLAM_)
+	{
+		// RST_Vallejo: Creating Subscriber for mapData topic coming from all robots
+		mapDataSub_ = nh.subscribe("/rtabmap/mapData", 1, &CoreWrapper::mapDataReceivedCallback, this); // RST_Vallejo: TODO: syncronize all incoming robot topics
+	}
+	else
+	{
+		setupCallbacks(nh, pnh, getName()); // do it at the end
+	}
 
-	setupCallbacks(nh, pnh, getName()); // do it at the end
 	if(!this->isDataSubscribed())
 	{
 		bool isRGBD = uStr2Bool(parameters_.at(Parameters::kRGBDEnabled()).c_str());
@@ -658,13 +700,38 @@ void CoreWrapper::publishLoop(double tfDelay, double tfTolerance)
 		if(!odomFrameId_.empty())
 		{
 			mapToOdomMutex_.lock();
-			ros::Time tfExpiration = ros::Time::now() + ros::Duration(tfTolerance);
-			geometry_msgs::TransformStamped msg;
-			msg.child_frame_id = odomFrameId_;
-			msg.header.frame_id = mapFrameId_;
-			msg.header.stamp = tfExpiration;
-			rtabmap_ros::transformToGeometryMsg(mapToOdom_, msg.transform);
-			tfBroadcaster_.sendTransform(msg);
+			// RST_Vallejo: TODO: Generalize for different number of robots
+			if(masterRGBDSLAM_)
+			{
+				ros::Time tfExpiration = ros::Time::now() + ros::Duration(tfTolerance);
+				geometry_msgs::TransformStamped msg;
+				msg.child_frame_id = odomFrameId_;		// RST_Vallejo: We start mapping with robot 1 ("robot_1/odom")
+				msg.header.frame_id = mapFrameId_;
+				msg.header.stamp = tfExpiration;
+				rtabmap_ros::transformToGeometryMsg(mapToOdomMulti_[0], msg.transform);
+				tfBroadcaster_.sendTransform(msg);
+
+				// if(numRobots_ == 2)	// RST_Vallejo: TODO: Send transforms depending on number of robots
+				// {
+				msg.child_frame_id = "robot_2/odom";
+				// RST_Vallejo: TODO: mapCorrection for individualized robots (Using posesOut ids million subscript)
+				// mapCorrection = optimizedPoses.at(posesOut.rbegin()->first) * posesOut.rbegin()->second.inverse();
+				rtabmap_ros::transformToGeometryMsg(mapToOdomMulti_[1], msg.transform);
+				tfBroadcaster_.sendTransform(msg);
+				// }
+			}
+			else // RST_Vallejo: Normal RTABMAP operation
+			{
+				ros::Time tfExpiration = ros::Time::now() + ros::Duration(tfTolerance);
+				geometry_msgs::TransformStamped msg;
+				msg.child_frame_id = odomFrameId_;
+				msg.header.frame_id = mapFrameId_;
+				msg.header.stamp = tfExpiration;
+				rtabmap_ros::transformToGeometryMsg(mapToOdom_, msg.transform);
+				tfBroadcaster_.sendTransform(msg);
+			}
+			
+			
 			mapToOdomMutex_.unlock();
 		}
 		r.sleep();
@@ -1314,6 +1381,259 @@ void CoreWrapper::commonStereoCallback(
 	covariance_ = cv::Mat();
 }
 
+// RST_Vallejo: Callback for MapData message from client robots (masterRGBDSLAM_=true)
+void CoreWrapper::mapDataReceivedCallback(const rtabmap_ros::MapDataConstPtr & msg)
+{
+	int numSignatures = 0; // RST_Vallejo: Only for degug purposes
+	Transform globalPose = Transform();
+	cv::Mat globalPoseCovariance = cv::Mat();
+	lastPoseMsgStamp_ = msg->header.stamp; // RST_Vallejo: Additional variable when not using odom messages (Multirobot environment)
+			
+	//global pose
+	if(!globalPose_.header.stamp.isZero())
+	{
+		// assume sensor is fixed
+		Transform sensorToBase = rtabmap_ros::getTransform(
+				globalPose_.header.frame_id,
+				frameId_,
+				lastPoseMsgStamp_,
+				tfListener_,
+				waitForTransform_?waitForTransformDuration_:0.0);
+		if(!sensorToBase.isNull())
+		{
+			globalPose = rtabmap_ros::transformFromPoseMsg(globalPose_.pose.pose);
+			globalPose *= sensorToBase; // transform global pose from sensor frame to robot base frame
+
+			// Correction of the global pose accounting the odometry movement since we received it
+			Transform correction = rtabmap_ros::getTransform(
+					frameId_,
+					odomFrameId_,
+					globalPose_.header.stamp,
+					lastPoseMsgStamp_,
+					tfListener_,
+					waitForTransform_?waitForTransformDuration_:0.0);
+			if(!correction.isNull())
+			{
+				globalPose *= correction;
+			}
+			else
+			{
+				NODELET_WARN("Could not adjust global pose accordingly to latest odometry pose. "
+						"If odometry is small since it received the global pose and "
+						"covariance is large, this should not be a problem.");
+			}
+			globalPoseCovariance = cv::Mat(6,6, CV_64FC1, (void*)globalPose_.pose.covariance.data()).clone();
+		}
+	}
+	globalPose_.header.stamp = ros::Time(0);
+
+	for(unsigned int i=0; i<msg->nodes.size(); ++i)
+	{
+		rtabmap::Signature clientSignature = rtabmap_ros::nodeDataFromROS(msg->nodes[i]); // RST_Vallejo: Adquiring signatures from nodes
+
+		// RST_Vallejo: Only process signatures with image information, generally on last node
+		if((!clientSignature.sensorData().imageCompressed().empty() &&
+			!clientSignature.sensorData().depthOrRightCompressed().empty() &&
+			(clientSignature.sensorData().cameraModels().size() || clientSignature.sensorData().stereoCameraModel().isValidForProjection())) ||
+			!clientSignature.sensorData().laserScanCompressed().empty())
+		{
+			numSignatures++;	// RST_Vallejo: Only for degug purposes
+			cv::Mat image, depth, laserScan, userData, userGround, obstacles;
+			std::map<int, rtabmap::Transform> clientPoses;
+			std::multimap<int, rtabmap::Link> clientLinks;
+			rtabmap::Transform mapToOdom;
+
+			clientSignature.sensorData().uncompressData(&image, &depth, &laserScan, &userData, &userGround, &obstacles);
+			
+			rtabmap_ros::mapGraphFromROS(msg->graph, clientPoses, clientLinks, mapToOdom);
+
+			clientSignature.sensorData().setGlobalPose(globalPose, globalPoseCovariance);
+
+			// mapToOdom_ = mapToOdom; // RST_Vallejo: TODO: Check if this conflicts with _mapCorrection done in rtabmap (specially if services are called)
+
+			process(lastPoseMsgStamp_,
+					&clientSignature,
+					clientPoses,
+					clientLinks,
+					odomFrameId_);	// RST_Vallejo: Not using odom messages (Multirobot environment)
+		}
+	}
+	// if(clientSignature.sensorData().imageRaw().empty())
+	// {
+	// 	NODELET_INFO("Image Empty!!");
+	// }
+	// else
+	// {
+	// 	NODELET_INFO("Image not Empty!!");
+	// }
+	// if(clientSignature.sensorData().imageCompressed().empty())
+	// {
+	// 	NODELET_INFO("Compressed Image Empty!!");
+	// }
+	// else
+	// {
+	// 	NODELET_INFO("Compressed Image not Empty!!");
+	// }
+	if(msg->nodes[(int)msg->nodes.size()-1].image.empty())
+	{
+		NODELET_INFO("Image Empty in Node!!");
+	}
+	NODELET_INFO("=====================================================");
+	NODELET_INFO("Number of Signatures processed on message MapData: %d", numSignatures);
+	NODELET_INFO("=====================================================");
+}
+
+// RST_Vallejo: Modified process function to use in a Multirobot environment (masterRGBDSLAM_=true)
+void CoreWrapper::process(
+		const ros::Time & stamp,
+		Signature * clientSignature,
+		const std::map<int, rtabmap::Transform> & clientPoses,
+		const std::multimap<int, rtabmap::Link> & clientLinks,
+		const std::string & odomFrameId)
+{
+	UTimer timer;
+	if(clientSignature->id() > 0)
+	{
+		double timeRtabmap = 0.0;
+		double timeUpdateMaps = 0.0;
+		double timePublishMaps = 0.0;
+
+		robotNumber_ = rtabmap_.getRobotNumber(clientSignature);
+
+		if(rtabmap_.process(clientSignature, clientPoses, clientLinks))
+		{
+			timeRtabmap = timer.ticks();
+			mapToOdomMutex_.lock();
+			mapToOdomMulti_[robotNumber_] = rtabmap_.getMultiCorrection()[robotNumber_];
+			odomFrameId_ = odomFrameId;
+			mapToOdomMutex_.unlock();
+
+			
+			// Publish local graph, info
+			this->publishStats(stamp);
+			std::map<int, rtabmap::Transform> filteredPoses = rtabmap_.getLocalOptimizedPoses();
+
+			// create a tmp signature with latest sensory data if latest signature was ignored
+			std::map<int, rtabmap::Signature> tmpSignature;
+			if(rtabmap_.getMemory() == 0 ||
+				filteredPoses.size() == 0 ||
+				rtabmap_.getMemory()->getLastSignatureId() != filteredPoses.rbegin()->first ||
+				rtabmap_.getMemory()->getLastWorkingSignature() == 0 ||
+				rtabmap_.getMemory()->getLastWorkingSignature()->sensorData().gridCellSize() == 0 ||
+				(!mapsManager_.getOccupancyGrid()->isGridFromDepth() && clientSignature->sensorData().laserScanRaw().channels() == 2)) // 2d laser scan would fill empty space for latest data
+			{
+				SensorData tmpData = clientSignature->sensorData();
+				tmpData.setId(-1);
+				tmpSignature.insert(std::make_pair(-1, Signature(-1, -1, 0, clientSignature->getStamp(), "", clientSignature->getPose(), Transform(), tmpData)));
+				filteredPoses.insert(std::make_pair(-1, rtabmap_.getMultiCorrection()[robotNumber_]*clientSignature->getPose()));
+			}
+
+			// Update maps
+			filteredPoses = mapsManager_.updateMapCaches(
+					filteredPoses,
+					rtabmap_.getMemory(),
+					false,
+					false,
+					tmpSignature);
+
+			timeUpdateMaps = timer.ticks();
+
+			mapsManager_.publishMaps(filteredPoses, stamp, mapFrameId_);
+
+			// update goal if planning is enabled
+			if(!currentMetricGoal_.isNull())
+			{
+				if(rtabmap_.getPath().size() == 0)
+				{
+					if(rtabmap_.getPathStatus() > 0)
+					{
+						// Goal reached
+						NODELET_INFO("Planning: Publishing goal reached!");
+					}
+					else
+					{
+						NODELET_WARN("Planning: Plan failed!");
+						if(mbClient_.isServerConnected())
+						{
+							mbClient_.cancelGoal();
+						}
+					}
+					if(goalReachedPub_.getNumSubscribers())
+					{
+						std_msgs::Bool result;
+						result.data = rtabmap_.getPathStatus() > 0;
+						goalReachedPub_.publish(result);
+					}
+					currentMetricGoal_.setNull();
+					lastPublishedMetricGoal_.setNull();
+					latestNodeWasReached_ = false;
+				}
+				else
+				{
+					currentMetricGoal_ = rtabmap_.getPose(rtabmap_.getPathCurrentGoalId());
+					if(!currentMetricGoal_.isNull())
+					{
+						// Adjust the target pose relative to last node
+						if(rtabmap_.getPathCurrentGoalId() == rtabmap_.getPath().back().first && rtabmap_.getLocalOptimizedPoses().size())
+						{
+							if(latestNodeWasReached_ ||
+								rtabmap_.getLastLocalizationPose().getDistance(currentMetricGoal_) < rtabmap_.getLocalRadius())
+							{
+								latestNodeWasReached_ = true;
+								currentMetricGoal_ *= rtabmap_.getPathTransformToGoal();
+							}
+						}
+
+						// publish next goal with updated currentMetricGoal_
+						publishCurrentGoal(stamp);
+
+						// publish local path
+						publishLocalPath(stamp);
+
+						// publish global path
+						publishGlobalPath(stamp);
+					}
+					else
+					{
+						NODELET_ERROR("Planning: Local map broken, current goal id=%d (the robot may have moved to far from planned nodes)",
+								rtabmap_.getPathCurrentGoalId());
+						rtabmap_.clearPath(-1);
+						if(goalReachedPub_.getNumSubscribers())
+						{
+							std_msgs::Bool result;
+							result.data = false;
+							goalReachedPub_.publish(result);
+						}
+						currentMetricGoal_.setNull();
+						lastPublishedMetricGoal_.setNull();
+						latestNodeWasReached_ = false;
+					}
+				}
+			}
+
+			timePublishMaps = timer.ticks();
+			
+		}
+		else
+		{
+			timeRtabmap = timer.ticks();
+		}
+		NODELET_INFO("rtabmap (%d): Rate=%.2fs, Limit=%.3fs, RTAB-Map=%.4fs, Maps update=%.4fs pub=%.4fs (local map=%d, WM=%d)",
+				rtabmap_.getLastLocationId(),
+				rate_>0?1.0f/rate_:0,
+				rtabmap_.getTimeThreshold()/1000.0f,
+				timeRtabmap,
+				timeUpdateMaps,
+				timePublishMaps,
+				(int)rtabmap_.getLocalOptimizedPoses().size(),
+				rtabmap_.getWMSize()+rtabmap_.getSTMSize());
+	}
+	else
+	{
+		NODELET_WARN("Ignoring received client signature because does not have a valid ID");
+	}
+}
+
 void CoreWrapper::process(
 		const ros::Time & stamp,
 		const SensorData & data,
@@ -1362,34 +1682,38 @@ void CoreWrapper::process(
 			{
 				// Publish local graph, info
 				this->publishStats(stamp);
-				std::map<int, rtabmap::Transform> filteredPoses = rtabmap_.getLocalOptimizedPoses();
-
-				// create a tmp signature with latest sensory data if latest signature was ignored
-				std::map<int, rtabmap::Signature> tmpSignature;
-				if(rtabmap_.getMemory() == 0 ||
-					filteredPoses.size() == 0 ||
-					rtabmap_.getMemory()->getLastSignatureId() != filteredPoses.rbegin()->first ||
-					rtabmap_.getMemory()->getLastWorkingSignature() == 0 ||
-					rtabmap_.getMemory()->getLastWorkingSignature()->sensorData().gridCellSize() == 0 ||
-					(!mapsManager_.getOccupancyGrid()->isGridFromDepth() && data.laserScanRaw().channels() == 2)) // 2d laser scan would fill empty space for latest data
+				// RST_Vallejo: mapsManager functionability only on the master machine when Multirobot mode activated and on the standard single robot RTABMAP 
+				if(!multiRobot_)	// RST_Vallejo: When in Multirobot and Master mode the modified CoreWrapper::process function is used insted
 				{
-					SensorData tmpData = data;
-					tmpData.setId(-1);
-					tmpSignature.insert(std::make_pair(-1, Signature(-1, -1, 0, data.stamp(), "", odom, Transform(), tmpData)));
-					filteredPoses.insert(std::make_pair(-1, rtabmap_.getMapCorrection()*odom));
+					std::map<int, rtabmap::Transform> filteredPoses = rtabmap_.getLocalOptimizedPoses();
+
+					// create a tmp signature with latest sensory data if latest signature was ignored
+					std::map<int, rtabmap::Signature> tmpSignature;
+					if(rtabmap_.getMemory() == 0 ||
+						filteredPoses.size() == 0 ||
+						rtabmap_.getMemory()->getLastSignatureId() != filteredPoses.rbegin()->first ||
+						rtabmap_.getMemory()->getLastWorkingSignature() == 0 ||
+						rtabmap_.getMemory()->getLastWorkingSignature()->sensorData().gridCellSize() == 0 ||
+						(!mapsManager_.getOccupancyGrid()->isGridFromDepth() && data.laserScanRaw().channels() == 2)) // 2d laser scan would fill empty space for latest data
+					{
+						SensorData tmpData = data;
+						tmpData.setId(-1);
+						tmpSignature.insert(std::make_pair(-1, Signature(-1, -1, 0, data.stamp(), "", odom, Transform(), tmpData)));
+						filteredPoses.insert(std::make_pair(-1, rtabmap_.getMapCorrection()*odom));
+					}
+
+					// Update maps
+					filteredPoses = mapsManager_.updateMapCaches(
+							filteredPoses,
+							rtabmap_.getMemory(),
+							false,
+							false,
+							tmpSignature);
+
+					timeUpdateMaps = timer.ticks();
+
+					mapsManager_.publishMaps(filteredPoses, stamp, mapFrameId_);
 				}
-
-				// Update maps
-				filteredPoses = mapsManager_.updateMapCaches(
-						filteredPoses,
-						rtabmap_.getMemory(),
-						false,
-						false,
-						tmpSignature);
-
-				timeUpdateMaps = timer.ticks();
-
-				mapsManager_.publishMaps(filteredPoses, stamp, mapFrameId_);
 
 				// update goal if planning is enabled
 				if(!currentMetricGoal_.isNull())
@@ -1728,7 +2052,11 @@ bool CoreWrapper::resetRtabmapCallback(std_srvs::Empty::Request&, std_srvs::Empt
 	currentMetricGoal_.setNull();
 	lastPublishedMetricGoal_.setNull();
 	latestNodeWasReached_ = false;
-	mapsManager_.clear();
+	// RST_Vallejo: mapsManager functionability only on the master machine when Multirobot mode activated and on the standard single robot RTABMAP 
+	if(!multiRobot_ || (multiRobot_ && masterRGBDSLAM_))
+	{	
+		mapsManager_.clear();
+	}
 	previousStamp_ = ros::Time(0);
 	userData_ = cv::Mat();
 	globalPose_.header.stamp = ros::Time(0);
@@ -1875,12 +2203,19 @@ bool CoreWrapper::getMapDataCallback(rtabmap_ros::GetMap::Request& req, rtabmap_
 				req.global);
 	}
 
-	//RGB-D SLAM data
-	rtabmap_ros::mapDataToROS(poses,
-		constraints,
-		signatures,
-		mapToOdom_,
-		res.data);
+	// if(masterRGBDSLAM_)
+	// {
+		
+	// }
+	// else
+	// {
+		//RGB-D SLAM data
+		rtabmap_ros::mapDataToROS(poses,
+			constraints,
+			signatures,
+			mapToOdom_,
+			res.data);
+	// }
 
 	res.data.header.stamp = ros::Time::now();
 	res.data.header.frame_id = mapFrameId_;
@@ -1997,11 +2332,18 @@ bool CoreWrapper::publishMapCallback(rtabmap_ros::PublishMap::Request& req, rtab
 			msg->header.stamp = now;
 			msg->header.frame_id = mapFrameId_;
 
-			rtabmap_ros::mapDataToROS(poses,
-				constraints,
-				signatures,
-				mapToOdom_,
-				*msg);
+			// if(masterRGBDSLAM_)
+			// {
+
+			// }
+			// else
+			// {
+				rtabmap_ros::mapDataToROS(poses,
+					constraints,
+					signatures,
+					mapToOdom_,
+					*msg);
+			// }
 
 			mapDataPub_.publish(msg);
 		}
@@ -2012,10 +2354,17 @@ bool CoreWrapper::publishMapCallback(rtabmap_ros::PublishMap::Request& req, rtab
 			msg->header.stamp = now;
 			msg->header.frame_id = mapFrameId_;
 
-			rtabmap_ros::mapGraphToROS(poses,
-				constraints,
-				mapToOdom_,
-				*msg);
+			// if(masterRGBDSLAM_)
+			// {
+
+			// }
+			// else
+			// {
+				rtabmap_ros::mapGraphToROS(poses,
+					constraints,
+					mapToOdom_,
+					*msg);
+			// }
 
 			mapGraphPub_.publish(msg);
 		}
