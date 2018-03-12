@@ -1,6 +1,6 @@
 <launch>
   <!-- Lauch file to run a Multirobot RGBDSLAM implementation integrating Rtabmap and the RST turtlebot package in CLIENT mode-->
-  
+
   <arg name="turtlebot_no"              default="1"/>
   <arg name="rgbd_odometry"             default="false"/>         <!-- We will use odometry from the robots -->
   <arg name="multi_robot"               default="true"/>          <!-- Multirobot mode -->
@@ -8,7 +8,7 @@
 
   <!-- For integration with RST Turtlebot Package -->
   <include file="$(find turtlebot_rst_bringup)/launch/start_client.launch">
-    <env name="TURTLEBOT_NO"             value="$(env turtlebot_no)"/>
+    <env name="TURTLEBOT_NO"             value="$(arg turtlebot_no)"/>
   </include>
 
   <group ns="robot_$(arg turtlebot_no)">  <!-- RST_Vallejo: Namespace in multirobot mode to individualize mapData messages  -->
