@@ -6,6 +6,8 @@
   <arg name="rtabmap_optimizer"         default="true"/>          <!-- If we want to use the map_optimizer_server node, set to false -->
   <arg name="multi_robot"               default="true"/>          <!-- Multirobot mode -->
   <arg name="master_rgbdslam"           default="true"/>          <!-- Master or Client mode -->
+  <arg name="num_robots"                default="1"/>             <!-- Number of Robots used in Multirobot mode (Max. 10) -->
+                                                                  <!-- Default 1 robot: Allows to optimize a single robot map in the Master station -->
 
   <group if="$(arg rtabmap_optimizer)">
     <include file="$(find rtabmap_ros)/launch/rtabmap.launch">
@@ -29,8 +31,10 @@
       <!-- Multirobot environment -->
       <arg name="multi_robot"             value="$(arg multi_robot)"/> 
       <arg name="master_rgbdslam"         value="$(arg master_rgbdslam)"/>
+      <arg name="num_robots"              value="$(arg num_robots)"/>
+      <arg name="robot_no"                value="$(arg turtlebot_no)"/>
       <arg name="namespace"               value="rtabmap_master"/>
-      <arg if="$(arg multi_robot)"        name="odom_frame_id"        value="robot_$(arg turtlebot_no)/odom"/>    <!-- As map is built from first robot -->
+      <arg if="$(arg multi_robot)"        name="odom_frame_id"        value="robot_$(arg turtlebot_no)/odom"/>    <!-- Main frame of reference for all robots -->
       <!-- RGB-D related topics -->
       <arg name="rgb_topic"               value="/robot_$(arg turtlebot_no)/camera/rgb/image_rect_color" />       <!-- TODO: Not needed in multirobot -->
       <arg name="depth_topic"             value="/robot_$(arg turtlebot_no)/camera/depth_registered/image_raw" /> <!-- TODO: Not needed in multirobot -->

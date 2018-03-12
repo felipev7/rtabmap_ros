@@ -25,8 +25,12 @@
   <arg name="localization"            default="false"/>
 
   <!-- RST_Vallejo: Multirobot mode -->
-  <arg name="multi_robot"             default="false"/>
-  <arg name="master_rgbdslam"         default="false"/>
+  <arg name="multi_robot"             default="false"/>   <!-- RST_Vallejo: Multirobot mode -->
+  <arg name="master_rgbdslam"         default="false"/>   <!-- RST_Vallejo: Master or Client mode -->
+  <arg name="max_num_robots"          default="10"/>      <!-- RST_Vallejo: Maximum number of Robots allowed in Multirobot mode -->
+  <arg name="num_robots"              default="1"/>       <!-- RST_Vallejo: Number of Robots used in Multirobot mode -->
+                                                          <!-- RST_Vallejo: Default 1 robot: Allows to optimize a single robot map in the Master station -->
+  <arg name="robot_no"                default="1"/>           <!-- RST_Vallejo: First robot used as reference for maintaining other robot positions -->
   
   <!-- sim time for convenience, if playing a rosbag -->
   <arg name="use_sim_time"            default="false"/>
@@ -199,6 +203,9 @@
   	  <remap from="grid_map"                  to="/map"/>       <!-- RST_Vallejo: TODO: Include this on our own launch file -->
       <param name="multi_robot"               type="bool"   value="$(arg multi_robot)"/>
       <param name="master_rgbdslam"           type="bool"   value="$(arg master_rgbdslam)"/>
+      <param name="max_num_robots"            type="int"    value="$(arg max_num_robots)"/>
+      <param name="num_robots"                type="int"    value="$(arg num_robots)"/>
+      <param name="robot_no"                  type="int"    value="$(arg robot_no)"/>    
       
       <!-- localization mode -->
 	  <param     if="$(arg localization)" name="Mem/IncrementalMemory" type="string" value="false"/>

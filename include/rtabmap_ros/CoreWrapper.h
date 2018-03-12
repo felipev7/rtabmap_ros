@@ -194,14 +194,17 @@ private:
 	bool latestNodeWasReached_;
 	rtabmap::ParametersMap parameters_;
 
-	// RST_Vallejo: Variable to determine the use of CoreWrapper as a Server or as a Client on a Multiple robots environment
-	bool multiRobot_;
-	bool masterRGBDSLAM_;
-	unsigned int robotNumber_;	// RST_Vallejo: keeping track of the robot being processed
-	ros::Time lastPoseMsgStamp_; // RST_Vallejo: stamp created for the received mapData message
+	bool multiRobot_;				// RST_Vallejo: Miltirobot mode ON/OFF
+	bool masterRGBDSLAM_;			// RST_Vallejo: Variable to determine the use of CoreWrapper as a Server or as a Client on a Multiple robots environment
+	int maxNumOfRobots_;			// RST_Vallejo: Number of robots used for Multirobot mode RGBDSLAM
+	int numOfRobots_;				// RST_Vallejo: Number of robots used for Multirobot mode RGBDSLAM
+	int robotNumber_;		// RST_Vallejo: keeping track of the robot being processed
+	unsigned int referenceRobot_;	// RST_Vallejo: reference robot to keep all other robot positions relative to it
+	ros::Time lastPoseMsgStamp_; 	// RST_Vallejo: stamp created for the received mapData message
 
 	std::string frameId_;
 	std::string odomFrameId_;
+	std::vector<std::string> odomFrameIds_;		// RST_Vallejo: Odom Frame Ids of the robots used in MultiRobot mode
 	std::string mapFrameId_;
 	std::string groundTruthFrameId_;
 	std::string groundTruthBaseFrameId_;

@@ -7,7 +7,6 @@
   <include file="$(find rtabmap_ros)/launch/rtabmap.launch">
     <arg name="rtabmap_args"            value="--delete_db_on_start 
                                                --udebug"/>
-    <arg name="namespace"               value="rtabmap_master"/>
     <!-- RGB-D related topics -->
     <arg name="rgb_topic"               value="/robot_$(arg turtlebot_no)/camera/rgb/image_rect_color" />
     <arg name="depth_topic"             value="/robot_$(arg turtlebot_no)/camera/depth_registered/image_raw" />

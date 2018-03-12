@@ -299,6 +299,9 @@ target_link_libraries(icp_odometry ${Libraries})
 add_executable(map_optimizer src/MapOptimizerNode.cpp)
 target_link_libraries(map_optimizer rtabmap_ros ${Libraries})
 
+add_executable(map_optimizer_server src/MapOptimizerServerNode.cpp)
+target_link_libraries(map_optimizer_server rtabmap_ros ${Libraries})
+
 add_executable(map_assembler src/MapAssemblerNode.cpp)
 target_link_libraries(map_assembler rtabmap_ros ${Libraries})
 
