@@ -1,6 +1,6 @@
 <launch>
-  <!-- For integration with RST Turtlebot Package -->
-
+  <!-- Lauch file to run a Multirobot RGBDSLAM implementation integrating Rtabmap and the RST turtlebot package in MASTER mode-->
+  
   <arg name="turtlebot_no"              default="1"/>             <!-- In Multirobot environment, the map is built from first robot as default-->
   <arg name="rgbd_odometry"             default="false"/>         <!-- We will use odometry from the robots -->
   <arg name="rtabmap_optimizer"         default="true"/>          <!-- If we want to use the map_optimizer_server node, set to false -->
