@@ -38,7 +38,6 @@
       <arg name="frame_id"                value="robot_$(arg turtlebot_no)/base_footprint"/>
       <arg name="visual_odometry"         value="$(arg rgbd_odometry)"/>
       <arg name="odom_topic"              value="/robot_$(arg turtlebot_no)/odom"/>
-      <arg name="compressed"              value="true"/>          <!-- We use compressed images due to bandwidth limitations -->
       <arg name="subscribe_scan"          value="true"/>
       <arg name="scan_topic"              value="/robot_$(arg turtlebot_no)/scan"/>
     </include>
