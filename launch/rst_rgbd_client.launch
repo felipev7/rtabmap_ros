@@ -31,6 +31,7 @@
       <!-- Multirobot environment -->
       <arg name="multi_robot"             value="$(arg multi_robot)"/> 
       <arg name="master_rgbdslam"         value="$(arg master_rgbdslam)"/>
+      <arg name="robot_no"                value="$(arg turtlebot_no)"/>
       <!-- RGB-D related topics -->
       <arg name="rgb_topic"               value="/robot_$(arg turtlebot_no)/camera/rgb/image_rect_color" />
       <arg name="depth_topic"             value="/robot_$(arg turtlebot_no)/camera/depth_registered/image_raw" />

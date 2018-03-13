@@ -19,6 +19,7 @@
                                                  --Grid/FromDepth true
                                                  --Grid/MaxObstacleHeight 1.0"/>
                                                  <!--  TESTING PARAMETERS
+                                                 g2o/Optimizer 1 | 0
                                                  Kp/MaxDepth 4.0 | 0 
                                                  Icp/CorrespondenceRatio 0.3 | 0.2
                                                  Vis/MinInliers 15 | 20
