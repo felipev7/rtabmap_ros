@@ -710,19 +710,15 @@ void CoreWrapper::publishLoop(double tfDelay, double tfTolerance)
 		if(!odomFrameId_.empty())
 		{
 			mapToOdomMutex_.lock();
-			// RST_Vallejo: TODO: Generalize for different number of robots
+			
 			if(multiRobot_ && masterRGBDSLAM_)
 			{
-				Transform poseOffset = Transform::getIdentity();
-				poseOffset.x()=(float)robotNumber_;
-				poseOffset.y()=(float)robotNumber_;
-				
 				ros::Time tfExpiration = ros::Time::now() + ros::Duration(tfTolerance);
 				geometry_msgs::TransformStamped msg;
 				msg.child_frame_id = odomFrameId_;		// RST_Vallejo: We start mapping with the first robot received
 				msg.header.frame_id = mapFrameId_;
 				msg.header.stamp = tfExpiration;
-				rtabmap_ros::transformToGeometryMsg(mapToOdomMulti_[referenceRobot_] * poseOffset, msg.transform);
+				rtabmap_ros::transformToGeometryMsg(mapToOdomMulti_[referenceRobot_], msg.transform);
 				tfBroadcaster_.sendTransform(msg);
 				NODELET_INFO("TF reference odom_frame_id = %s", odomFrameId_.c_str());
 
@@ -752,8 +748,7 @@ void CoreWrapper::publishLoop(double tfDelay, double tfTolerance)
 				rtabmap_ros::transformToGeometryMsg(mapToOdom_, msg.transform);
 				tfBroadcaster_.sendTransform(msg);
 			}
-			
-			
+						
 			mapToOdomMutex_.unlock();
 		}
 		r.sleep();
@@ -861,12 +856,6 @@ bool CoreWrapper::odomUpdate(const nav_msgs::OdometryConstPtr & odomMsg)
 			covariance_ = cv::Mat();
 		}
 
-		// if(multiRobot_ && !masterRGBDSLAM_)	// RST_Vallejo: Only for visualization, offset of position for each client robot
-		// {
-		// 	odom.x()+=1.0*(robotNumber_);		// RST_Vallejo: TODO: Include in the launch files
-		// 	odom.y()+=1.0*(robotNumber_);	 	// RST_Vallejo: TODO: Include in the launch files
-		// }
-
 		lastPoseIntermediate_ = false;
 		lastPose_ = odom;
 		lastPoseStamp_ = odomMsg->header.stamp;
@@ -948,12 +937,6 @@ bool CoreWrapper::odomTFUpdate(const ros::Time & stamp)
 			rtabmap_.triggerNewMap();
 			covariance_ = cv::Mat();
 		}
-
-		// if(multiRobot_ && !masterRGBDSLAM_)	// RST_Vallejo: Only for visualization, offset of position for each client robot
-		// {
-		// 	odom.x()+=1.0*(robotNumber_);		// RST_Vallejo: TODO: Include in the launch files
-		// 	odom.y()+=1.0*(robotNumber_);	 	// RST_Vallejo: TODO: Include in the launch files
-		// }
 
 		lastPoseIntermediate_ = false;
 		lastPose_ = odom;
@@ -1477,13 +1460,6 @@ void CoreWrapper::mapDataReceivedCallback(const rtabmap_ros::MapDataConstPtr & m
 				NODELET_INFO("rtabmap: odom_frame_id %d = %s", j, odomFrameIds_[j].c_str());
 			}
 		// }
-
-		// NODELET_INFO("Last pose = %s pose x = %f", clientSignature.getPose().prettyPrint().c_str(), clientSignature.getPose().x());
-		// Transform odomOffset = clientSignature.getPose();
-		// odomOffset.x()+=1.0*(robotNumber_);
-		// odomOffset.y()+=1.0*(robotNumber_);
-		// clientSignature.setPose(odomOffset);
-		// NODELET_INFO("New pose = %s pose x = %f", clientSignature.getPose().prettyPrint().c_str(), clientSignature.getPose().x());
 
 		// RST_Vallejo: Only process signatures with image information, generally on last node
 		if((!clientSignature.sensorData().imageCompressed().empty() &&
